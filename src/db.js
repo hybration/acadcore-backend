@@ -27,7 +27,7 @@ async function withTenant(institutionId, fn) {
   try {
     await client.query('BEGIN');
     if (institutionId) {
-      await client.query('SET LOCAL app.current_institution_id = $1', [institutionId]);
+      await client.query("SELECT set_config('app.current_institution_id', $1, true)", [institutionId]);
     }
     const result = await fn(client);
     await client.query('COMMIT');
