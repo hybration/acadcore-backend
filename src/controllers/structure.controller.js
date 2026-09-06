@@ -232,10 +232,30 @@ async function createLevel(req, res) {
   res.status(201).json(level);
 }
 
+async function updateLevel(req, res) {
+  const { levelId } = req.params;
+  const { name, sortOrder } = req.body;
+
+  const level = await withTenant(req.user.institutionId, async (client) => {
+    const r = await client.query(
+      `UPDATE levels SET
+         name = COALESCE($2, name),
+         sort_order = COALESCE($3, sort_order)
+       WHERE level_id = $1
+       RETURNING level_id, name, sort_order`,
+      [levelId, name || null, sortOrder ?? null]
+    );
+    return r.rows[0];
+  });
+
+  if (!level) return res.status(404).json({ error: 'Level not found' });
+  res.json(level);
+}
+
 module.exports = {
   listFaculties, createFaculty, updateFaculty,
   listDepartments, createDepartment, updateDepartment,
   listProgrammes, createProgramme, updateProgramme,
   listSessions, createSession,
-  listLevels, createLevel,
+  listLevels, createLevel, updateLevel,
 };

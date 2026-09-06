@@ -31,5 +31,6 @@ router.post('/sessions', requirePermission('sessions.manage'), asyncHandler(ctrl
 // Levels
 router.get('/levels', asyncHandler(ctrl.listLevels));
 router.post('/levels', requirePermission('levels.manage'), asyncHandler(ctrl.createLevel));
+router.patch('/levels/:levelId', requirePermission('levels.manage'), asyncHandler(ctrl.updateLevel));
 
 module.exports = router;
