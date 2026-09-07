@@ -10,6 +10,7 @@ const verifyRoutes = require('./routes/verify.routes');
 const importRoutes = require('./routes/import.routes');
 const structureRoutes = require('./routes/structure.routes');
 const usersRoutes = require('./routes/users.routes');
+const institutionsRoutes = require('./routes/institutions.routes');
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use('/api/verify', verifyRoutes); // public, no auth
 app.use('/api/import', importRoutes);
 app.use('/api', structureRoutes); // /api/faculties, /api/departments, /api/programmes, /api/sessions, /api/levels
 app.use('/api/users', usersRoutes);
+app.use('/api/institutions', institutionsRoutes);
 
 // Centralized error handler. Every async route is wrapped in
 // asyncHandler (src/utils/asyncHandler.js), which forwards rejected

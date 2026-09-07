@@ -7,13 +7,35 @@ const { withTenant } = require('../db');
  */
 async function convertToGraduate(req, res) {
   const { studentId } = req.params;
-  const { programmeId, graduationSessionId, finalCgpa, classOfDegree, degreeAwarded } = req.body;
+  const { graduationSessionId, finalCgpa, classOfDegree, degreeAwarded } = req.body;
 
   if (!graduationSessionId) {
     return res.status(400).json({ error: 'graduationSessionId is required' });
   }
 
   const graduate = await withTenant(req.user.institutionId, async (client) => {
+    // The graduate's programme is always whatever they were registered
+    // under — pulled from their own student record, not taken from the
+    // request body. (Previously this expected the frontend to send a
+    // programmeId that nothing ever provided, which inserted NULL into
+    // a NOT NULL column and surfaced as a generic 500.)
+    const studentResult = await client.query(
+      `SELECT programme_id, status FROM students WHERE student_id = $1`,
+      [studentId]
+    );
+    const student = studentResult.rows[0];
+
+    if (!student) {
+      const err = new Error('Student not found');
+      err.status = 404;
+      throw err;
+    }
+    if (student.status === 'graduated') {
+      const err = new Error('This student has already been graduated');
+      err.status = 409;
+      throw err;
+    }
+
     await client.query(
       `UPDATE students SET status = 'graduated', updated_at = now() WHERE student_id = $1`,
       [studentId]
@@ -26,7 +48,7 @@ async function convertToGraduate(req, res) {
          graduation_status, verification_status
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,'approved','verified')
        RETURNING graduate_id, verification_code, final_cgpa, class_of_degree`,
-      [studentId, req.user.institutionId, programmeId, graduationSessionId, finalCgpa, classOfDegree, degreeAwarded]
+      [studentId, req.user.institutionId, student.programme_id, graduationSessionId, finalCgpa, classOfDegree, degreeAwarded]
     );
 
     await client.query(

@@ -62,6 +62,7 @@ async function uploadBatch(req, res) {
       if (importType === 'students') {
         if (!data.first_name) errors.push(['first_name', 'first_name is required']);
         if (!data.last_name) errors.push(['last_name', 'last_name is required']);
+        if (!data.level) errors.push(['level', 'level is required']);
       } else {
         if (data.cgpa === undefined || data.cgpa === '') errors.push(['cgpa', 'cgpa is required']);
         if (!data.class) errors.push(['class', 'class is required']);
@@ -103,6 +104,16 @@ async function uploadBatch(req, res) {
         errors.push(['session', 'session is required']);
       }
 
+      let levelId = null;
+      if (importType === 'students' && data.level) {
+        const lv = await client.query(
+          `SELECT level_id FROM levels WHERE institution_id = $1 AND name ILIKE $2 LIMIT 1`,
+          [req.user.institutionId, data.level]
+        );
+        if (lv.rows[0]) levelId = lv.rows[0].level_id;
+        else errors.push(['level', `Level "${data.level}" not found`]);
+      }
+
       if (matricNo && importType === 'students') {
         const existing = await client.query(
           `SELECT 1 FROM students WHERE institution_id = $1 AND matric_number = $2`,
@@ -114,9 +125,9 @@ async function uploadBatch(req, res) {
       const isValid = errors.length === 0;
 
       await client.query(
-        `UPDATE import_row_staging SET is_valid = $1, resolved_programme_id = $2, resolved_session_id = $3
-         WHERE staging_id = $4`,
-        [isValid, programmeId, sessionId, row.staging_id]
+        `UPDATE import_row_staging SET is_valid = $1, resolved_programme_id = $2, resolved_session_id = $3, resolved_level_id = $4
+         WHERE staging_id = $5`,
+        [isValid, programmeId, sessionId, levelId, row.staging_id]
       );
 
       for (const [field, message] of errors) {
@@ -213,9 +224,9 @@ async function commitImport(req, res) {
       for (const row of validRows.rows) {
         const data = row.raw_data;
         await client.query(
-          `INSERT INTO students (institution_id, programme_id, admission_session_id, matric_number, first_name, last_name, status)
-           VALUES ($1,$2,$3,$4,$5,$6,'active')`,
-          [req.user.institutionId, row.resolved_programme_id, row.resolved_session_id, data.matric_no, data.first_name, data.last_name]
+          `INSERT INTO students (institution_id, programme_id, admission_session_id, current_level_id, matric_number, first_name, last_name, status)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,'active')`,
+          [req.user.institutionId, row.resolved_programme_id, row.resolved_session_id, row.resolved_level_id, data.matric_no, data.first_name, data.last_name]
         );
         await client.query(`UPDATE import_row_staging SET imported_at = now() WHERE staging_id = $1`, [row.staging_id]);
         importedCount++;
