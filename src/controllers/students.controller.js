@@ -8,15 +8,16 @@ async function search(req, res) {
       `SELECT st.student_id, st.matric_number,
               st.first_name || ' ' || st.last_name AS full_name,
               pr.name AS programme_name, st.status,
-              st.current_level_id, lv.name AS level_name,
-              gr.verification_code, gr.final_cgpa, gr.class_of_degree
+              st.current_level_id, lv.name AS level_name
        FROM students st
        JOIN programmes pr ON pr.programme_id = st.programme_id
        LEFT JOIN levels lv ON lv.level_id = st.current_level_id
-       LEFT JOIN graduate_records gr ON gr.student_id = st.student_id
-       WHERE st.matric_number ILIKE '%' || $1 || '%'
-          OR st.first_name ILIKE '%' || $1 || '%'
-          OR st.last_name ILIKE '%' || $1 || '%'
+       WHERE st.status != 'graduated'
+         AND (
+           st.matric_number ILIKE '%' || $1 || '%'
+           OR st.first_name ILIKE '%' || $1 || '%'
+           OR st.last_name ILIKE '%' || $1 || '%'
+         )
        ORDER BY st.last_name, st.first_name
        LIMIT 50`,
       [q]

@@ -14,6 +14,15 @@ const institutionsRoutes = require('./routes/institutions.routes');
 
 const app = express();
 
+// Render (and most hosting platforms) sit behind a reverse proxy, which
+// sets X-Forwarded-For to the real client IP. Express doesn't trust that
+// header by default (a request could forge it directly otherwise), so
+// express-rate-limit can't safely use it for its per-IP limits until we
+// explicitly say to trust it. `1` means trust exactly one hop of proxy
+// (Render's own load balancer) — appropriate here since we're not behind
+// multiple chained proxies.
+app.set('trust proxy', 1);
+
 app.use(helmet());
 app.use(cors({
   // In production, only the deployed frontend should be allowed to call

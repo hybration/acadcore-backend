@@ -78,6 +78,8 @@ GET  /api/verify/EV-2026-8F92K1                (no auth — public)
 GET  /api/institutions                         (super_admin only)
 POST /api/institutions                         { "institutionName","institutionSlug","adminFullName","adminEmail","adminPassword" }  (super_admin only)
 
+POST /api/institutions/admins/:userId/reset-password  (super_admin only — generates and returns a new password once, since existing ones can never be retrieved)
+
 GET  /api/faculties | /departments?facultyId=... | /programmes?departmentId=... | /sessions | /levels
 POST /api/faculties | /departments | /programmes | /sessions | /levels   (requires the matching *.manage permission)
 ```

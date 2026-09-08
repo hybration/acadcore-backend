@@ -1,4 +1,5 @@
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const { withSuperAdmin } = require('../db');
 
 /**
@@ -72,7 +73,21 @@ async function listInstitutions(req, res) {
     const result = await client.query(
       `SELECT i.institution_id, i.name, i.slug, i.is_active, i.created_at,
               COUNT(DISTINCT s.student_id) AS student_count,
-              COUNT(DISTINCT g.graduate_id) AS graduate_count
+              COUNT(DISTINCT g.graduate_id) AS graduate_count,
+              -- First institution_admin found for this institution (there
+              -- may be more than one; this shows the earliest-created).
+              (SELECT u.full_name FROM users u
+                 JOIN roles r ON r.role_id = u.role_id
+                WHERE u.institution_id = i.institution_id AND r.name = 'institution_admin'
+                ORDER BY u.created_at ASC LIMIT 1) AS admin_full_name,
+              (SELECT u.email FROM users u
+                 JOIN roles r ON r.role_id = u.role_id
+                WHERE u.institution_id = i.institution_id AND r.name = 'institution_admin'
+                ORDER BY u.created_at ASC LIMIT 1) AS admin_email,
+              (SELECT u.user_id FROM users u
+                 JOIN roles r ON r.role_id = u.role_id
+                WHERE u.institution_id = i.institution_id AND r.name = 'institution_admin'
+                ORDER BY u.created_at ASC LIMIT 1) AS admin_user_id
        FROM institutions i
        LEFT JOIN students s ON s.institution_id = i.institution_id
        LEFT JOIN graduate_records g ON g.institution_id = i.institution_id
@@ -84,4 +99,38 @@ async function listInstitutions(req, res) {
   res.json(institutions);
 }
 
-module.exports = { createInstitution, listInstitutions };
+/**
+ * Sets a NEW password for an institution's admin and returns it once, in
+ * the response — the same "show it once, share it directly" pattern as
+ * creating a user. There is no way to retrieve an EXISTING password
+ * (it's bcrypt-hashed — one-way, by design, same as every account on
+ * this platform); resetting to a fresh known password is the only
+ * legitimate way to get someone back into their account.
+ */
+async function resetAdminPassword(req, res) {
+  const { userId } = req.params;
+
+  const newPassword = crypto.randomBytes(9).toString('base64').replace(/[+/=]/g, '').slice(0, 12);
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+
+  const updated = await withSuperAdmin(async (client) => {
+    const result = await client.query(
+      `UPDATE users SET password_hash = $1, updated_at = now() WHERE user_id = $2
+       RETURNING user_id, email, full_name`,
+      [passwordHash, userId]
+    );
+    if (result.rows[0]) {
+      // Revoke their existing sessions too — same reasoning as the
+      // self-service password change: a stolen/lingering token shouldn't
+      // keep working after a password reset.
+      await client.query('UPDATE user_sessions SET is_revoked = TRUE WHERE user_id = $1', [userId]);
+    }
+    return result.rows[0];
+  });
+
+  if (!updated) return res.status(404).json({ error: 'User not found' });
+
+  res.json({ ...updated, newPassword });
+}
+
+module.exports = { createInstitution, listInstitutions, resetAdminPassword };
